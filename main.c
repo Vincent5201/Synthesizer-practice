@@ -522,8 +522,14 @@ int main()
     /* Define the melody using MIDI note
      * numbers. A note value of 0 indicates a rest.
      */
-    const uint8_t melody[] = {
+    const uint8_t melody1[] = {
         60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
+        67, 67, 65, 65, 64, 64, 62, 0, 67, 67, 65, 65, 64, 64, 62, 0,
+        60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
+    };
+
+    const uint8_t melody2[] = {
+        60, 60, 60, 60, 60, 60, 60, 0, 65, 65, 65, 65, 65, 65, 65, 0,
         67, 67, 65, 65, 64, 64, 62, 0, 67, 67, 65, 65, 64, 64, 62, 0,
         60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
     };
@@ -552,16 +558,17 @@ int main()
             note_duration = SYNTH_MS(2000 / beats[note_index]);
 
             /* Retrieve the MIDI note for the current position */
-            uint8_t note = melody[note_index];
-            if (note) {
+            uint8_t note1 = melody1[note_index];
+            uint8_t note2 = melody2[note_index];
+            if (note1) {
                 /* Voice 0 plays the note as given, and Voice 1 plays two
                  * octaves lower.
                  */
-                synth_voice_note_on(&synth_voices[0], note);
-                synth_voice_note_on(&synth_voices[1], note - 24);
+                synth_voice_note_on(&synth_voices[0], note1);
+                synth_voice_note_on(&synth_voices[1], note2);
             }
             note_index++;
-            if (note_index >= sizeof(melody))
+            if (note_index >= sizeof(melody1))
                 break;
         } else if (note_duration < 500) {
             /* When the note duration is almost over, cut the note short to
