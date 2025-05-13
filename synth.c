@@ -457,6 +457,80 @@ static int write_wav(const char *filename,
     return 0;
 }
 
+char *name = "";
+
+void save_wav(uint8_t *melody1, uint8_t *melody2, uint8_t *beats, int melody_size)
+{
+    uint32_t note_duration = 0, sample_count = 0, note_index = 0;
+
+    /* fill up a buffer with audio */
+    int16_t *audio_buffer = malloc(SAMPLE_RATE * 60); /* 60 seconds */
+    assert(audio_buffer);
+
+    /* Process audio until the entire melody is played */
+    for (;;) {
+        if (note_duration == 0) {
+            /* Calculate note duration in samples.
+             * The duration is determined by the beat value: shorter beats
+             * result in longer note durations.
+             */
+            note_duration = SYNTH_MS(2000 / beats[note_index]);
+
+            /* Retrieve the MIDI note for the current position */
+            uint8_t note1 = melody1[note_index];
+            uint8_t note2 = melody2[note_index];
+            if (note1) {
+                /* Voice 0 plays the note as given, and Voice 1 plays two
+                 * octaves lower.
+                 */
+                synth_voice_note_on(&synth_voices[0], note1);
+                //synth_voice_note_on(&synth_voices[1], note2 - 12);
+            }
+            note_index++;
+            if (note_index >= melody_size)
+                break;
+        } else if (note_duration < 500) {
+            /* When the note duration is almost over, cut the note short to
+             * allow for a natural decay.
+             */
+            synth_voice_note_off(&synth_voices[0]);
+            //synth_voice_note_off(&synth_voices[1]);
+        }
+        note_duration--;
+
+        /* Process a single audio sample and store it in the buffer */
+        q15_t v = synth_process();
+        audio_buffer[sample_count++] = v;
+    }
+
+    /* write the audio buffer to a wav file */
+    int res = write_wav("out.wav", audio_buffer, sample_count);
+
+    /* save a raw file */
+    //char filename[256];
+    //snprintf(filename, sizeof(filename), "%s.raw", name);
+    //FILE *raw = fopen(filename, "wb");
+    //fwrite(audio_buffer, sizeof(int16_t), sample_count, raw);
+    //fclose(raw);
+    
+    free(audio_buffer);
+    printf("succesful\n");
+}
+
+void gen_basic_sounds(uint8_t *melody1, uint8_t *melody2, uint8_t *beats, int melody_size)
+{
+    char* notes[] = {
+        "C3", "C3#", "D3", "D3#", "E3", "F3", "F3#", "G3", "G3#", "A3", "A3#", "B3",
+        "C4", "C4#", "D4", "D4#", "E4", "F4", "F4#", "G4", "G4#", "A4", "A4#", "B4",
+        "C5", "C5#", "D5", "D5#", "E5", "F5", "F5#", "G5", "G5#", "A5", "A5#", "B5"
+    };
+    for(int i = 0; i < 36; i++) {
+        name = notes[i];
+        melody1[0]++;
+        save_wav(melody1, melody2, beats, melody_size);
+    }
+}
+
 int main()
 {
     /* Configure voice 0:
@@ -519,21 +593,17 @@ int main()
                               8000                     /* factor */
     );
 
-    /* fill up a buffer with audio */
-    int16_t *audio_buffer = malloc(SAMPLE_RATE * 60); /* 60 seconds */
-    assert(audio_buffer);
-    uint32_t sample_count = 0;
-
     /* Define the melody using MIDI note
      * numbers. A note value of 0 indicates a rest.
+     * The end of melody must add a zero.
      */
-    const uint8_t melody1[] = {
+    uint8_t melody1[] = {
         60, 62, 64, 65, 67, 69, 71, 0, 48, 50, 52, 53, 55, 57, 59, 0,
         72, 74, 76, 77, 79, 81, 83, 0, 67, 67, 65, 65, 64, 64, 62, 0,
         60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
     };
 
-    const uint8_t melody2[] = {
+    uint8_t melody2[] = {
         60, 62, 64, 65, 67, 69, 71, 0, 48, 50, 52, 53, 55, 57, 59, 0,
         72, 74, 76, 77, 79, 81, 83, 0, 67, 67, 65, 65, 64, 64, 62, 0,
         60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
@@ -542,56 +612,12 @@ int main()
     /* Define the rhythmic values (beats) corresponding to each note.
      * These values determine the duration of each note.
      */
-    const uint8_t beats[] = {
+    uint8_t beats[] = {
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2,
         4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2,
     };
-
-    /* Counter for the remaining duration (in samples) of the current note */
-    uint32_t note_duration = 0;
-
-    /* Index to the current note in the melody arrays */
-    uint32_t note_index = 0;
-
-    /* Process audio until the entire melody is played */
-    for (;;) {
-        if (note_duration == 0) {
-            /* Calculate note duration in samples.
-             * The duration is determined by the beat value: shorter beats
-             * result in longer note durations.
-             */
-            note_duration = SYNTH_MS(2000 / beats[note_index]);
-
-            /* Retrieve the MIDI note for the current position */
-            uint8_t note1 = melody1[note_index];
-            uint8_t note2 = melody2[note_index];
-            if (note1) {
-                /* Voice 0 plays the note as given, and Voice 1 plays two
-                 * octaves lower.
-                 */
-                synth_voice_note_on(&synth_voices[0], note1);
-                //synth_voice_note_on(&synth_voices[1], note2);
-            }
-            note_index++;
-            if (note_index >= sizeof(melody1))
-                break;
-        } else if (note_duration < 500) {
-            /* When the note duration is almost over, cut the note short to
-             * allow for a natural decay.
-             */
-            synth_voice_note_off(&synth_voices[0]);
-            //synth_voice_note_off(&synth_voices[1]);
-        }
-        note_duration--;
-
-        /* Process a single audio sample and store it in the buffer */
-        q15_t v = synth_process();
-        audio_buffer[sample_count++] = v;
-    }
-
-    /* write the audio buffer to a wav file */
-    int res = write_wav("out.wav", audio_buffer, sample_count);
-    free(audio_buffer);
-    printf("succesful\n");
-    return res;
+    
+    save_wav(melody1, melody2, beats, sizeof(melody1));
+    //gen_basic_sounds(melody1, melody2, beats, sizeof(melody1));
+    return 0;
 }
