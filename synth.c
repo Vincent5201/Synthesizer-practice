@@ -477,7 +477,7 @@ int main()
         &voice->nodes[3], &voice->nodes[1].output, /* gain - from envelope */
         &voice->phase_incr,      /* phase increment - from MIDI note */
         &voice->nodes[2].output, /* detune - from envelope */
-        sawtooth_wave);
+        square_wave);
 
     /* Low-Frequency Oscillator */
     synth_init_osc_node(&voice->nodes[2], &vibra_to_inc, /* gain */
@@ -491,27 +491,32 @@ int main()
                               8000                     /* factor */
     );
 
-    /* Configure voice 1 with alternative settings:
-     * This voice uses a similar chain with different envelope and filter
-     * parameters.
-     */
     voice = &synth_voices[1];
 
     synth_init_envelope_node(&voice->nodes[1], NULL, /* gain */
-                             100,                    /* attack */
-                             500,                    /* decay */
-                             Q15_MAX * 0.5,          /* sustain */
-                             15                      /* release */
+                             500,                    /* attack */
+                             150,                    /* decay */
+                             Q15_MAX * .8,           /* sustain */
+                             150                     /* release */
     );
 
+    /* Initialize oscillator */
     synth_init_osc_node(
-        &voice->nodes[2], &voice->nodes[1].output, /* gain - from envelope */
-        &voice->phase_incr, /* phase increment - from MIDI note */
-        NULL, square_wave);
+        &voice->nodes[3], &voice->nodes[1].output, /* gain - from envelope */
+        &voice->phase_incr,      /* phase increment - from MIDI note */
+        &voice->nodes[2].output, /* detune - from envelope */
+        square_wave);
 
+    /* Low-Frequency Oscillator */
+    synth_init_osc_node(&voice->nodes[2], &vibra_to_inc, /* gain */
+                        &lfo_phase_inc,                  /* phase increment */
+                        NULL,                            /* detune */
+                        sine_wave);
+
+    /* Initialize low-pass filter */
     synth_init_filter_lp_node(&voice->nodes[0], NULL,  /* gain */
-                              &voice->nodes[2].output, /* input */
-                              4000                     /* factor */
+                              &voice->nodes[3].output, /* input */
+                              8000                     /* factor */
     );
 
     /* fill up a buffer with audio */
@@ -523,14 +528,14 @@ int main()
      * numbers. A note value of 0 indicates a rest.
      */
     const uint8_t melody1[] = {
-        60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
-        67, 67, 65, 65, 64, 64, 62, 0, 67, 67, 65, 65, 64, 64, 62, 0,
+        60, 62, 64, 65, 67, 69, 71, 0, 48, 50, 52, 53, 55, 57, 59, 0,
+        72, 74, 76, 77, 79, 81, 83, 0, 67, 67, 65, 65, 64, 64, 62, 0,
         60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
     };
 
     const uint8_t melody2[] = {
-        60, 60, 60, 60, 60, 60, 60, 0, 65, 65, 65, 65, 65, 65, 65, 0,
-        67, 67, 65, 65, 64, 64, 62, 0, 67, 67, 65, 65, 64, 64, 62, 0,
+        60, 62, 64, 65, 67, 69, 71, 0, 48, 50, 52, 53, 55, 57, 59, 0,
+        72, 74, 76, 77, 79, 81, 83, 0, 67, 67, 65, 65, 64, 64, 62, 0,
         60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
     };
 
@@ -565,7 +570,7 @@ int main()
                  * octaves lower.
                  */
                 synth_voice_note_on(&synth_voices[0], note1);
-                synth_voice_note_on(&synth_voices[1], note2);
+                //synth_voice_note_on(&synth_voices[1], note2);
             }
             note_index++;
             if (note_index >= sizeof(melody1))
@@ -575,7 +580,7 @@ int main()
              * allow for a natural decay.
              */
             synth_voice_note_off(&synth_voices[0]);
-            synth_voice_note_off(&synth_voices[1]);
+            //synth_voice_note_off(&synth_voices[1]);
         }
         note_duration--;
 
