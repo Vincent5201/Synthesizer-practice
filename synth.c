@@ -459,15 +459,11 @@ static int write_wav(const char *filename,
 
 char *name = "";
 
-void save_wav(uint8_t *melody1, uint8_t *melody2, uint8_t *beats, int melody_size)
+int gen_audio(int16_t *audio_buffer, uint8_t *melody1, uint8_t *melody2,
+              uint8_t *beats, int melody1_size, int melody2_size)
 {
     uint32_t note_duration = 0, sample_count = 0, note_index = 0;
 
-    /* fill up a buffer with audio */
-    int16_t *audio_buffer = malloc(SAMPLE_RATE * 60); /* 60 seconds */
-    assert(audio_buffer);
-
-    /* Process audio until the entire melody is played */
     for (;;) {
         if (note_duration == 0) {
             /* Calculate note duration in samples.
@@ -478,7 +474,9 @@ void save_wav(uint8_t *melody1, uint8_t *melody2, uint8_t *beats, int melody_siz
 
             /* Retrieve the MIDI note for the current position */
             uint8_t note1 = melody1[note_index];
-            uint8_t note2 = melody2[note_index];
+            uint8_t note2;
+            if (note_index < melody2_size)
+                note2 = melody2[note_index];
             if (note1) {
                 /* Voice 0 plays the note as given, and Voice 1 plays two
                  * octaves lower.
@@ -487,7 +485,7 @@ void save_wav(uint8_t *melody1, uint8_t *melody2, uint8_t *beats, int melody_siz
                 //synth_voice_note_on(&synth_voices[1], note2 - 12);
             }
             note_index++;
-            if (note_index >= melody_size)
+            if (note_index >= melody1_size)
                 break;
         } else if (note_duration < 500) {
             /* When the note duration is almost over, cut the note short to
@@ -502,33 +500,40 @@ void save_wav(uint8_t *melody1, uint8_t *melody2, uint8_t *beats, int melody_siz
         q15_t v = synth_process();
         audio_buffer[sample_count++] = v;
     }
-
-    /* write the audio buffer to a wav file */
-    int res = write_wav("out.wav", audio_buffer, sample_count);
-
-    /* save a raw file */
-    //char filename[256];
-    //snprintf(filename, sizeof(filename), "%s.raw", name);
-    //FILE *raw = fopen(filename, "wb");
-    //fwrite(audio_buffer, sizeof(int16_t), sample_count, raw);
-    //fclose(raw);
-    
-    free(audio_buffer);
-    printf("succesful\n");
+    return sample_count;
 }
 
-void gen_basic_sounds(uint8_t *melody1, uint8_t *melody2, uint8_t *beats, int melody_size)
+void save_raw(int16_t *audio_buffer, int sample_count, char *name)
+{
+    /* save a raw file */
+    char filename[64];
+    snprintf(filename, sizeof(filename), "%s.raw", name);
+    FILE *raw = fopen(filename, "wb");
+    fwrite(audio_buffer, sizeof(int16_t), sample_count, raw);
+    fclose(raw);
+}
+
+void gen_basic_sounds()
 {
     char* notes[] = {
         "C3", "C3#", "D3", "D3#", "E3", "F3", "F3#", "G3", "G3#", "A3", "A3#", "B3",
         "C4", "C4#", "D4", "D4#", "E4", "F4", "F4#", "G4", "G4#", "A4", "A4#", "B4",
         "C5", "C5#", "D5", "D5#", "E5", "F5", "F5#", "G5", "G5#", "A5", "A5#", "B5"
     };
+    int16_t *audio_buffer = malloc(SAMPLE_RATE * 60); /* 60 seconds */
+    assert(audio_buffer);
+    uint8_t melody1[] = {
+        60, 0
+    };
+    uint8_t melody2[] = { 0 };
+    uint8_t beats[] = { 1, 4 };
+
     for(int i = 0; i < 36; i++) {
-        name = notes[i];
-        melody1[0]++;
-        save_wav(melody1, melody2, beats, melody_size);
+        int sample_count = gen_audio(audio_buffer, melody1, melody2, beats,
+                                     sizeof(melody1), sizeof(melody2));
+        save_raw(audio_buffer, sample_count, notes[i]);
     }
+    free(audio_buffer);
 }
 
 int main()
@@ -604,9 +609,7 @@ int main()
     };
 
     uint8_t melody2[] = {
-        60, 62, 64, 65, 67, 69, 71, 0, 48, 50, 52, 53, 55, 57, 59, 0,
-        72, 74, 76, 77, 79, 81, 83, 0, 67, 67, 65, 65, 64, 64, 62, 0,
-        60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0,
+        0
     };
 
     /* Define the rhythmic values (beats) corresponding to each note.
@@ -616,8 +619,17 @@ int main()
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2,
         4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2,
     };
-    
-    save_wav(melody1, melody2, beats, sizeof(melody1));
-    //gen_basic_sounds(melody1, melody2, beats, sizeof(melody1));
+
+    int16_t *audio_buffer = malloc(SAMPLE_RATE * 60); /* 60 seconds */
+    assert(audio_buffer);
+
+    int sample_count = gen_audio(audio_buffer, melody1, melody2, beats,
+                                 sizeof(melody1), sizeof(melody2));
+
+    int res = write_wav("out.wav", audio_buffer, sample_count);
+    free(audio_buffer);
+    printf("succesful\n");
+
+    //gen_basic_sounds();
     return 0;
 }
