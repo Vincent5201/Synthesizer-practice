@@ -6,7 +6,7 @@
 #include <math.h>
 
 #define SAMPLE_RATE 44100
-#define SYNTH_NODES 8
+#define SYNTH_NODES 4
 #define SYNTH_VOICES 2
 #define SYNTH_MS(ms) ((ms * SAMPLE_RATE) / 1000)
 #define SYNTH_HZ_TO_PHASE(frequency) (q31_t)((frequency * (double)Q31_MAX) / SAMPLE_RATE)
@@ -329,7 +329,7 @@ static inline int64_t sat_q31(int64_t x) {
 
 static q31_t svf_cutoff(float fc) {
     q31_t fc_q31 = (q31_t)((fc / SAMPLE_RATE) * Q31_MAX);
-    q31_t phase = fc_q31;  // 0..0.5 → 0..π
+    q31_t phase = fc_q31;
     q31_t s = q31_sin(phase);
     q31_t f = s << 1;
 
@@ -434,7 +434,8 @@ static q31_t midi_to_phase_incr(uint8_t note) {
 
 
 void synth_voice_note_on(synth_voice_t *v, uint8_t n) {
-    v->note = n; v->gate = 1;
+    v->note = n;
+    v->gate = 1;
     v->phase_incr = midi_to_phase_incr(n);
     for (int i = 0; i < SYNTH_NODES; i++)
         v->nodes[i].state = 0;
@@ -493,38 +494,55 @@ static int write_wav(const char *fn, const int16_t *buf, uint32_t count) {
 int main() {
     q31_t lfo_inc = SYNTH_HZ_TO_PHASE(5), vib_inc = SYNTH_HZ_TO_PHASE(10);
     
-    // Voice 0: Sawtooth
+    // Voice 0
     synth_init_envelope_node(&synth_voices[0].nodes[1], NULL,
         (q31_t)(0.0040*Q31_MAX), (q31_t)(0.0012*Q31_MAX), (q31_t)(Q31_MAX*0.8), (q31_t)(0.0006*Q31_MAX));
     synth_init_osc_node(&synth_voices[0].nodes[2], &vib_inc, &lfo_inc, NULL, sine_wave);
     synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
     synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(2000), (q31_t)(0.5 * Q31_MAX));
 
-    // Voice 1: Square
+    // Voice 1
     synth_init_envelope_node(&synth_voices[1].nodes[1], NULL,
-        (q31_t)(0.0100 * Q31_MAX), (q31_t)(0.0025*Q31_MAX), (q31_t)(0.6*Q31_MAX), (q31_t)(0.0015*Q31_MAX));
+        (q31_t)(0.0040 * Q31_MAX), (q31_t)(0.0012*Q31_MAX), (q31_t)(0.8*Q31_MAX), (q31_t)(0.0006*Q31_MAX));
     synth_init_osc_node(&synth_voices[1].nodes[2], &synth_voices[1].nodes[1].output, &synth_voices[1].phase_incr, NULL, square_wave);
     synth_init_filter_lp_node(&synth_voices[1].nodes[0], &synth_voices[1].nodes[2].output, svf_cutoff(1000), (q31_t)(0.95 * Q31_MAX));
     
     int16_t *buf = malloc(SAMPLE_RATE * 20); uint32_t sc = 0;
-    uint8_t mel[] = {60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0};
-    uint8_t bts[] = {4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2};
-    uint32_t dur = 0, idx = 0;
+    uint8_t mel0[] = {60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0};
+    uint8_t mel1[] = {60, 64, 66, 67, 69, 67, 65, 64};
+    uint8_t bts0[] = {4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2};
+    uint8_t bts1[] = {2, 2, 2, 1, 2, 2, 2, 1};
 
+    uint32_t idx0 = 0, idx1 = 0;
+    uint32_t dur0 = 0, dur1 = 0;
+    
     for (;;) {
-        if (dur == 0) {
-            dur = SYNTH_MS(2000 / bts[idx]);
-            if (mel[idx]) {
-                synth_voice_note_on(&synth_voices[0], mel[idx]);
-                synth_voice_note_on(&synth_voices[1], mel[idx]-24);
-            }
-            if (++idx >= sizeof(mel))
+        if (dur0 == 0) {
+            // next note of mel0
+            if (idx0 >= sizeof(mel0))
                 break;
-        } else if (dur < 500) {
+            dur0 = SYNTH_MS(2000 / bts0[idx0]);
+            if (mel0[idx0])
+                synth_voice_note_on(&synth_voices[0], mel0[idx0]);
+            idx0++;
+        } else if (dur0 < 500) {
+            // early withdraw
             synth_voice_note_off(&synth_voices[0]);
+        }
+        
+        if (dur1 == 0) {
+            // next note of mel0
+            if (idx1 >= sizeof(mel1))
+                break;
+            dur1 = SYNTH_MS(2000 / bts1[idx1]);
+            if (mel1[idx1])
+                synth_voice_note_on(&synth_voices[1], mel1[idx1]-24);
+            idx1++;
+        } else if (dur1 < 500) {
             synth_voice_note_off(&synth_voices[1]);
         }
-        dur--;
+        dur0--;
+        dur1--;
         int32_t dither = (rand() & 0xFFFF) + (rand() & 0xFFFF) - 0xFFFF;
         buf[sc++] = (int16_t)((synth_process() + dither) >> 16);
     }
