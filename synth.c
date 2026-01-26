@@ -8,22 +8,20 @@
 #define SAMPLE_RATE 44100
 #define SYNTH_NODES 4
 #define SYNTH_VOICES 2
-#define SYNTH_MS(ms) ((ms * SAMPLE_RATE) / 1000)
-#define SYNTH_HZ_TO_PHASE(frequency) (q31_t)((frequency * (double)Q31_MAX) / SAMPLE_RATE)
-
+#define SYNTH_MS(ms) ((uint32_t)(ms * SAMPLE_RATE) / 1000)      // change ms to samples
+#define SYNTH_HZ_TO_PHASE(frequency) \
+        (q31_t)((frequency * Q31_MAX) / SAMPLE_RATE)            // change samples to phases
 typedef int32_t q31_t;
-typedef int8_t q7_t;
 #define Q31_MAX 0x7FFFFFFF
 #define Q31_MIN 0x80000000
-
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-
+// basic components of Synthesizer
 typedef struct {
-    q31_t *phase_incr;
-    q31_t *detune;
+    q31_t *phase_incr;      // frequency
+    q31_t *detune;          // fintune / lfo / vibration
     q31_t (*wavegen)(q31_t input, q31_t dt); 
 } synth_oscillator_t;
 
@@ -33,10 +31,9 @@ typedef struct {
 
 typedef struct {
     q31_t *input;
-    int64_t low;
-    int64_t band;
-    q31_t factor;
-    q31_t res;
+    int64_t low, band;      // for SVF
+    q31_t factor;           // cutoff frequency
+    q31_t res;              // resonance
 } synth_filter_t;
 
 typedef struct {
@@ -58,25 +55,24 @@ typedef struct {
     q31_t *gain;
     q31_t output;
     synth_node_type_t type;
-    uint8_t param1;
     union {
         synth_oscillator_t osc;
         synth_envelope_t env;
         synth_filter_t filter;
         synth_mixer_t mixer;
     };
-} synth_node_t;
+} synth_node_t;         // structure for a node
 
 typedef struct {
     uint8_t note;
     uint8_t gate : 1;
     q31_t phase_incr;
     synth_node_t nodes[SYNTH_NODES];
-} synth_voice_t;
-
+} synth_voice_t;            // structure for a voice
 
 synth_voice_t synth_voices[SYNTH_VOICES];
 
+// smooth discontinuity points of the sawtooth/square wave
 static q31_t poly_blep(q31_t phase, q31_t dt) {
     if (dt == 0)
         return 0;
@@ -85,17 +81,18 @@ static q31_t poly_blep(q31_t phase, q31_t dt) {
         int64_t t = ((int64_t)phase << 31) / dt;
         q31_t t_q31 = (q31_t)t;
         q31_t t_sq = (q31_t)(((int64_t)t_q31 * t_q31) >> 31);
-        return (q31_t)((int64_t)2 * t_q31 - t_sq - Q31_MAX);
+        return (q31_t)((int64_t)2 * t_q31 - t_sq - Q31_MAX);        // 2t - t^2 - 1
 
     } else if (phase > (Q31_MAX - dt)) {
         int64_t t = ((int64_t)(phase - Q31_MAX) << 31) / dt;
         q31_t t_q31 = (q31_t)t;
         q31_t t_sq = (q31_t)(((int64_t)t_q31 * t_q31) >> 31);
-        return (q31_t)(t_sq + (int64_t)2 * t_q31 + Q31_MAX);
+        return (q31_t)(t_sq + (int64_t)2 * t_q31 + Q31_MAX);        // 2t + t^2 - 1
     }
     return 0;
 }
 
+// waves
 q31_t sawtooth_wave(q31_t input, q31_t dt) {
     q31_t naive = (q31_t)(((int64_t)input * 2) - Q31_MAX);
     return naive - poly_blep(input, dt);
@@ -108,16 +105,6 @@ q31_t square_wave(q31_t input, q31_t dt) {
     naive -= poly_blep(phase2, dt);
     return naive;
 }
-
-static const q7_t sine_lut[129] = {
-    0, 6, 12, 19, 25, 31, 37, 43, 49, 54, 60, 65, 71, 76, 81, 85, 90, 94, 98, 102, 106, 109,
-    112, 115, 117, 120, 122, 123, 125, 126, 126, 127, 127, 127, 126, 126, 125, 123, 122, 120,
-    117, 115, 112, 109, 106, 102, 98, 94, 90, 85, 81, 76, 71, 65, 60, 54, 49, 43, 37, 31, 25,
-    19, 12, 6, 0, -6, -12, -19, -25, -31, -37, -43, -49, -54, -60, -65, -71, -76, -81, -85, -90,
-    -94, -98, -102, -106, -109, -112, -115, -117, -120, -122, -123, -125, -126, -126, -127, -127,
-    -127, -126, -126, -125, -123, -122, -120, -117, -115, -112, -109, -106, -102, -98, -94, -90,
-    -85, -81, -76, -71, -65, -60, -54, -49, -43, -37, -31, -25, -19, -12, -6, 0
-};
 
 #define SIN_LUT_BITS 10
 #define SIN_LUT_SIZE (1 << SIN_LUT_BITS)
@@ -287,16 +274,7 @@ static const q31_t sin_lut[SIN_LUT_SIZE + 1] = {
     2147119824, 2147177933, 2147230990, 2147278994, 2147321945, 2147359843,
     2147392689, 2147420481, 2147443221, 2147460907, 2147473540, 2147481120, 2147483647};
 
-
-q31_t sine_wave(q31_t input, q31_t dt) {
-    int index = (input >> 24) & 0x7F;
-    q31_t factor = 16843009;
-    q31_t res = sine_lut[index] * factor;
-    q31_t next = sine_lut[index + 1] * factor;
-    res += (q31_t)(((int64_t)(next - res) * ((input >> 16) & 0xFF)) >> 8);
-    return res;
-}
-
+// only need to store 1/4 of sine wave
 static inline q31_t q31_sin(q31_t phase) {
     uint32_t p = (uint32_t)phase;
     uint32_t quad = p >> 30;     // 0..3
@@ -317,6 +295,10 @@ static inline q31_t q31_sin(q31_t phase) {
     }
 }
 
+q31_t sine_wave(q31_t input, q31_t dt) {
+    (void)dt;
+    return q31_sin(input);
+}
 
 static inline int64_t sat_q31(int64_t x) {
     if (x > Q31_MAX)
@@ -326,30 +308,27 @@ static inline int64_t sat_q31(int64_t x) {
     return x;
 }
 
-
+// Low pass filter cut-off
 static q31_t svf_cutoff(float fc) {
-    q31_t fc_q31 = (q31_t)((fc / SAMPLE_RATE) * Q31_MAX);
-    q31_t phase = fc_q31;
-    q31_t s = q31_sin(phase);
-    q31_t f = s << 1;
-
+    q31_t fc_q31 = (q31_t)(((int64_t)fc << 31) / SAMPLE_RATE);
+    q31_t f = q31_sin(fc_q31) << 1;
     if (f > (q31_t)(0.99 * Q31_MAX))
         f = (q31_t)(0.99 * Q31_MAX);
-
     return f;
 }
 
+// change linear to exponetial
 static inline q31_t env_step(q31_t cur, q31_t target, q31_t coef) {
     return cur + (q31_t)(((int64_t)(target - cur) * coef) >> 31);
 }
 
-
+// calculate all nodes of voices
 q31_t synth_process() {
     int64_t main_output = 0;
     for (int vi = 0; vi < SYNTH_VOICES; vi++) {
         synth_voice_t *voice = &synth_voices[vi];
         q31_t outputs[SYNTH_NODES];
-
+        // first: calculate output
         for (int i = 0; i < SYNTH_NODES && voice->nodes[i].type != SYNTH_NODE_NONE; i++) {
             synth_node_t *node = &voice->nodes[i];
             switch (node->type) {
@@ -357,11 +336,11 @@ q31_t synth_process() {
                     q31_t dt = (*node->osc.phase_incr);
                     if (node->osc.detune)
                         dt += *node->osc.detune;
-                    outputs[i] = node->osc.wavegen(node->state & 0x7FFFFFFF, dt);
+                    outputs[i] = node->osc.wavegen(node->state & Q31_MAX, dt);
                     break;
                 }
                 case SYNTH_NODE_ENVELOPE:
-                    outputs[i] = node->state & 0x7FFFFFFF;
+                    outputs[i] = node->state & Q31_MAX;
                     outputs[i] = (q31_t)(((int64_t)outputs[i] * outputs[i]) >> 31);
                     if (node->env.sustain < 0)
                         outputs[i] = -outputs[i];
@@ -383,11 +362,12 @@ q31_t synth_process() {
                 outputs[i] = (q31_t)(((int64_t)outputs[i] * (*node->gain)) >> 31);
         }
 
+        // second: update output
         for (int i = 0; i < SYNTH_NODES && voice->nodes[i].type != SYNTH_NODE_NONE; i++) {
             synth_node_t *node = &voice->nodes[i];
             node->output = outputs[i];
             if (node->type == SYNTH_NODE_OSCILLATOR) {
-                node->state = (node->state + *node->osc.phase_incr + (node->osc.detune ? *node->osc.detune : 0)) & 0x7FFFFFFF;
+                node->state = (node->state + *node->osc.phase_incr + (node->osc.detune ? *node->osc.detune : 0)) & Q31_MAX;
             } else if (node->type == SYNTH_NODE_ENVELOPE) {
                 q31_t cur = node->state;
                 if (voice->gate) {
@@ -418,32 +398,23 @@ q31_t synth_process() {
     return (q31_t)(((main_output * (Q31_MAX / SYNTH_VOICES)) >> 31) * 0.7);
 }
 
-
+// table of 12 notes: C, C#, D, D#, ... B
 static const q31_t octave_phases[12] = {
-    SYNTH_HZ_TO_PHASE(4186.01), SYNTH_HZ_TO_PHASE(4434.92), SYNTH_HZ_TO_PHASE(4698.63),
-    SYNTH_HZ_TO_PHASE(4978.03), SYNTH_HZ_TO_PHASE(5274.04), SYNTH_HZ_TO_PHASE(5587.65),
-    SYNTH_HZ_TO_PHASE(5919.91), SYNTH_HZ_TO_PHASE(6271.93), SYNTH_HZ_TO_PHASE(6644.88),
-    SYNTH_HZ_TO_PHASE(7040.00), SYNTH_HZ_TO_PHASE(7458.62), SYNTH_HZ_TO_PHASE(7902.13)
+    SYNTH_HZ_TO_PHASE(4186.01), SYNTH_HZ_TO_PHASE(4434.92),
+    SYNTH_HZ_TO_PHASE(4698.63), SYNTH_HZ_TO_PHASE(4978.03),
+    SYNTH_HZ_TO_PHASE(5274.04), SYNTH_HZ_TO_PHASE(5587.65),
+    SYNTH_HZ_TO_PHASE(5919.91), SYNTH_HZ_TO_PHASE(6271.93),
+    SYNTH_HZ_TO_PHASE(6644.88), SYNTH_HZ_TO_PHASE(7040.00),
+    SYNTH_HZ_TO_PHASE(7458.62), SYNTH_HZ_TO_PHASE(7902.13)
 };
 
-
-static q31_t midi_to_phase_incr(uint8_t note) {
-    int oct = note / 12, idx = note % 12;
-    return octave_phases[idx] >> (8 - oct + 1);
-}
-
-
+// 60 -> C4, 62 -> D4...
 void synth_voice_note_on(synth_voice_t *v, uint8_t n) {
     v->note = n;
     v->gate = 1;
-    v->phase_incr = midi_to_phase_incr(n);
+    v->phase_incr = octave_phases[n % 12] >> (8 - n / 12 + 1);
     for (int i = 0; i < SYNTH_NODES; i++)
         v->nodes[i].state = 0;
-}
-
-
-void synth_voice_note_off(synth_voice_t *v) {
-    v->gate = 0;
 }
 
 
@@ -493,7 +464,7 @@ static int write_wav(const char *fn, const int16_t *buf, uint32_t count) {
 
 int process_voice(int *dur, size_t *idx, uint8_t *mel, uint8_t *bts,
                     size_t mel_size, synth_voice_t *voice, int note_offset) {
-    if (*dur == 0) {
+    if (*dur == 0) {            // take next note
         if (*idx >= mel_size)
             return 1;
         *dur = SYNTH_MS(2000 / bts[*idx]);
@@ -502,7 +473,8 @@ int process_voice(int *dur, size_t *idx, uint8_t *mel, uint8_t *bts,
         }
         (*idx)++;
     } else if (*dur == 500) {
-        synth_voice_note_off(voice);
+        // early withdraw
+        voice->gate = 0;
     }
     (*dur)--;
     return 0;
@@ -511,14 +483,14 @@ int process_voice(int *dur, size_t *idx, uint8_t *mel, uint8_t *bts,
 
 int main() {
     // Voice: string, pad
-
+    /*
     q31_t lfo_inc = SYNTH_HZ_TO_PHASE(0.3), vib_inc = SYNTH_HZ_TO_PHASE(0);
     synth_init_envelope_node(&synth_voices[0].nodes[1], NULL,
         (q31_t)(0.02*Q31_MAX), (q31_t)(0.01*Q31_MAX), (q31_t)(Q31_MAX*0.7), (q31_t)(0.02*Q31_MAX));
     synth_init_osc_node(&synth_voices[0].nodes[2], &vib_inc, &lfo_inc, NULL, sawtooth_wave);
     synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
     synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(1200), (q31_t)(0.2 * Q31_MAX));
-    
+    */
 
     // Voice: brass
     /*
@@ -528,24 +500,24 @@ int main() {
     synth_init_osc_node(&synth_voices[0].nodes[2], &vib_inc, &lfo_inc, NULL, sawtooth_wave);
     synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
     synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(1800), (q31_t)(0.7 * Q31_MAX));
-    */
+    
 
     // Voice: flute
-    /*
+    */
     q31_t lfo_inc = SYNTH_HZ_TO_PHASE(4.8), vib_inc = SYNTH_HZ_TO_PHASE(0.15);
     synth_init_envelope_node(&synth_voices[0].nodes[1], NULL,
         (q31_t)(0.04*Q31_MAX), (q31_t)(0.05*Q31_MAX), (q31_t)(Q31_MAX*0.9), (q31_t)(0.1*Q31_MAX));
     synth_init_osc_node(&synth_voices[0].nodes[2], &vib_inc, &lfo_inc, NULL, sine_wave);
     synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
     synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(900), (q31_t)(0.05 * Q31_MAX));
-    */
-        
+    
+        /*
     // Voice 1
     synth_init_envelope_node(&synth_voices[1].nodes[1], NULL,
         (q31_t)(0.0100 * Q31_MAX), (q31_t)(0.0025*Q31_MAX), (q31_t)(0.6*Q31_MAX), (q31_t)(0.0015*Q31_MAX));
     synth_init_osc_node(&synth_voices[1].nodes[2], &synth_voices[1].nodes[1].output, &synth_voices[1].phase_incr, NULL, square_wave);
     synth_init_filter_lp_node(&synth_voices[1].nodes[0], &synth_voices[1].nodes[2].output, svf_cutoff(1000), (q31_t)(0.95 * Q31_MAX));
-
+*/
     int16_t *buf = malloc(SAMPLE_RATE * 20); uint32_t sc = 0;
     uint8_t mel0[] = {60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0};
     uint8_t mel1[] = {60, 64, 66, 67, 0, 69, 67, 65, 64, 0};
