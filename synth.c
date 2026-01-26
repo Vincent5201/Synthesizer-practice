@@ -6,11 +6,11 @@
 #include <math.h>
 
 #define SAMPLE_RATE 44100
-#define SYNTH_NODES 4
+#define SYNTH_NODES 8
 #define SYNTH_VOICES 2
 #define SYNTH_MS(ms) ((uint32_t)(ms * SAMPLE_RATE) / 1000)      // change ms to samples
 #define SYNTH_HZ_TO_PHASE(frequency) \
-        (q31_t)((frequency * Q31_MAX) / SAMPLE_RATE)            // change samples to phases
+        (q31_t)(((int64_t)frequency * Q31_MAX) / SAMPLE_RATE)            // change samples to phases
 typedef int32_t q31_t;
 #define Q31_MAX 0x7FFFFFFF
 #define Q31_MIN 0x80000000
@@ -38,7 +38,7 @@ typedef struct {
 
 typedef struct {
     q31_t *inputs[3];
-} synth_mixer_t;
+} synth_mixer_t;            // useless in this project
 
 typedef enum {
     SYNTH_NODE_NONE = 0,
@@ -51,8 +51,8 @@ typedef enum {
 } synth_node_type_t;
 
 typedef struct {
-    int32_t state;
-    q31_t *gain;
+    int32_t state;                  // node's position on wave
+    q31_t *gain;                    
     q31_t output;
     synth_node_type_t type;
     union {
@@ -500,10 +500,9 @@ int main() {
     synth_init_osc_node(&synth_voices[0].nodes[2], &vib_inc, &lfo_inc, NULL, sawtooth_wave);
     synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
     synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(1800), (q31_t)(0.7 * Q31_MAX));
-    
+    */
 
     // Voice: flute
-    */
     q31_t lfo_inc = SYNTH_HZ_TO_PHASE(4.8), vib_inc = SYNTH_HZ_TO_PHASE(0.15);
     synth_init_envelope_node(&synth_voices[0].nodes[1], NULL,
         (q31_t)(0.04*Q31_MAX), (q31_t)(0.05*Q31_MAX), (q31_t)(Q31_MAX*0.9), (q31_t)(0.1*Q31_MAX));
@@ -511,6 +510,7 @@ int main() {
     synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
     synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(900), (q31_t)(0.05 * Q31_MAX));
     
+
         /*
     // Voice 1
     synth_init_envelope_node(&synth_voices[1].nodes[1], NULL,
