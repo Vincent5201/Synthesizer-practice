@@ -491,58 +491,77 @@ static int write_wav(const char *fn, const int16_t *buf, uint32_t count) {
 }
 
 
+int process_voice(int *dur, size_t *idx, uint8_t *mel, uint8_t *bts,
+                    size_t mel_size, synth_voice_t *voice, int note_offset) {
+    if (*dur == 0) {
+        if (*idx >= mel_size)
+            return 1;
+        *dur = SYNTH_MS(2000 / bts[*idx]);
+        if (mel[*idx]) {
+            synth_voice_note_on(voice, mel[*idx] + note_offset);
+        }
+        (*idx)++;
+    } else if (*dur == 500) {
+        synth_voice_note_off(voice);
+    }
+    (*dur)--;
+    return 0;
+}
+
+
 int main() {
-    q31_t lfo_inc = SYNTH_HZ_TO_PHASE(5), vib_inc = SYNTH_HZ_TO_PHASE(10);
-    
-    // Voice 0
+    // Voice: string, pad
+
+    q31_t lfo_inc = SYNTH_HZ_TO_PHASE(0.3), vib_inc = SYNTH_HZ_TO_PHASE(0);
     synth_init_envelope_node(&synth_voices[0].nodes[1], NULL,
-        (q31_t)(0.0040*Q31_MAX), (q31_t)(0.0012*Q31_MAX), (q31_t)(Q31_MAX*0.8), (q31_t)(0.0006*Q31_MAX));
+        (q31_t)(0.02*Q31_MAX), (q31_t)(0.01*Q31_MAX), (q31_t)(Q31_MAX*0.7), (q31_t)(0.02*Q31_MAX));
+    synth_init_osc_node(&synth_voices[0].nodes[2], &vib_inc, &lfo_inc, NULL, sawtooth_wave);
+    synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
+    synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(1200), (q31_t)(0.2 * Q31_MAX));
+    
+
+    // Voice: brass
+    /*
+    q31_t lfo_inc = SYNTH_HZ_TO_PHASE(0.3), vib_inc = SYNTH_HZ_TO_PHASE(5);
+    synth_init_envelope_node(&synth_voices[0].nodes[1], NULL,
+        (q31_t)(0.003*Q31_MAX), (q31_t)(0.02*Q31_MAX), (q31_t)(Q31_MAX*0.6), (q31_t)(0.01*Q31_MAX));
+    synth_init_osc_node(&synth_voices[0].nodes[2], &vib_inc, &lfo_inc, NULL, sawtooth_wave);
+    synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
+    synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(1800), (q31_t)(0.7 * Q31_MAX));
+    */
+
+    // Voice: flute
+    /*
+    q31_t lfo_inc = SYNTH_HZ_TO_PHASE(4.8), vib_inc = SYNTH_HZ_TO_PHASE(0.15);
+    synth_init_envelope_node(&synth_voices[0].nodes[1], NULL,
+        (q31_t)(0.04*Q31_MAX), (q31_t)(0.05*Q31_MAX), (q31_t)(Q31_MAX*0.9), (q31_t)(0.1*Q31_MAX));
     synth_init_osc_node(&synth_voices[0].nodes[2], &vib_inc, &lfo_inc, NULL, sine_wave);
     synth_init_osc_node(&synth_voices[0].nodes[3], &synth_voices[0].nodes[1].output, &synth_voices[0].phase_incr, &synth_voices[0].nodes[2].output, sawtooth_wave);
-    synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(2000), (q31_t)(0.5 * Q31_MAX));
-
+    synth_init_filter_lp_node(&synth_voices[0].nodes[0], &synth_voices[0].nodes[3].output, svf_cutoff(900), (q31_t)(0.05 * Q31_MAX));
+    */
+        
     // Voice 1
     synth_init_envelope_node(&synth_voices[1].nodes[1], NULL,
-        (q31_t)(0.0040 * Q31_MAX), (q31_t)(0.0012*Q31_MAX), (q31_t)(0.8*Q31_MAX), (q31_t)(0.0006*Q31_MAX));
+        (q31_t)(0.0100 * Q31_MAX), (q31_t)(0.0025*Q31_MAX), (q31_t)(0.6*Q31_MAX), (q31_t)(0.0015*Q31_MAX));
     synth_init_osc_node(&synth_voices[1].nodes[2], &synth_voices[1].nodes[1].output, &synth_voices[1].phase_incr, NULL, square_wave);
     synth_init_filter_lp_node(&synth_voices[1].nodes[0], &synth_voices[1].nodes[2].output, svf_cutoff(1000), (q31_t)(0.95 * Q31_MAX));
-    
+
     int16_t *buf = malloc(SAMPLE_RATE * 20); uint32_t sc = 0;
     uint8_t mel0[] = {60, 60, 67, 67, 69, 69, 67, 0, 65, 65, 64, 64, 62, 62, 60, 0};
-    uint8_t mel1[] = {60, 64, 66, 67, 69, 67, 65, 64};
+    uint8_t mel1[] = {60, 64, 66, 67, 0, 69, 67, 65, 64, 0};
     uint8_t bts0[] = {4, 4, 4, 4, 4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 2, 2};
-    uint8_t bts1[] = {2, 2, 2, 1, 2, 2, 2, 1};
+    uint8_t bts1[] = {2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
 
     uint32_t idx0 = 0, idx1 = 0;
     uint32_t dur0 = 0, dur1 = 0;
     
     for (;;) {
-        if (dur0 == 0) {
-            // next note of mel0
-            if (idx0 >= sizeof(mel0))
-                break;
-            dur0 = SYNTH_MS(2000 / bts0[idx0]);
-            if (mel0[idx0])
-                synth_voice_note_on(&synth_voices[0], mel0[idx0]);
-            idx0++;
-        } else if (dur0 < 500) {
-            // early withdraw
-            synth_voice_note_off(&synth_voices[0]);
-        }
+        if (process_voice(&dur0, &idx0, mel0, bts0, sizeof(mel0), &synth_voices[0], 0))
+            break;
         
-        if (dur1 == 0) {
-            // next note of mel0
-            if (idx1 >= sizeof(mel1))
-                break;
-            dur1 = SYNTH_MS(2000 / bts1[idx1]);
-            if (mel1[idx1])
-                synth_voice_note_on(&synth_voices[1], mel1[idx1]-24);
-            idx1++;
-        } else if (dur1 < 500) {
-            synth_voice_note_off(&synth_voices[1]);
-        }
-        dur0--;
-        dur1--;
+        if (process_voice(&dur1, &idx1, mel1, bts1, sizeof(mel1), &synth_voices[1], -24))
+            break;
+
         int32_t dither = (rand() & 0xFFFF) + (rand() & 0xFFFF) - 0xFFFF;
         buf[sc++] = (int16_t)((synth_process() + dither) >> 16);
     }
