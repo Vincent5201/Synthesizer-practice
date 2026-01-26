@@ -530,12 +530,9 @@ int main() {
     for (;;) {
         if (process_voice(&dur0, &idx0, mel0, bts0, sizeof(mel0), &synth_voices[0], 0))
             break;
-        
         if (process_voice(&dur1, &idx1, mel1, bts1, sizeof(mel1), &synth_voices[1], -24))
             break;
-
-        int32_t dither = (rand() & 0xFFFF) + (rand() & 0xFFFF) - 0xFFFF;
-        buf[sc++] = (int16_t)((synth_process() + dither) >> 16);
+        buf[sc++] = (int16_t)((synth_process()) >> 16);
     }
     write_wav("out.wav", buf, sc);
     free(buf);
