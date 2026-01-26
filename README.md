@@ -1,4 +1,5 @@
-## A Fixed-Point Modular Synthesizer Based on [here](https://gist.github.com/jserv/061b2ac9be06b446f31087357b8e4054)
+## A Practice of Fixed-Point Modular Synthesizer
+> based on [here](https://gist.github.com/jserv/061b2ac9be06b446f31087357b8e4054)
 ## Enhancements
 * Upgraded q15_t to q31_t.
 * Implemented PolyBLEP for Sawtooth and Square waves.
