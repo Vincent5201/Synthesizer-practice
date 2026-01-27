@@ -1,0 +1,33 @@
+voice0_attack 0.04
+voice0_decay 0.05
+voice0_sustain 0.9
+voice0_release 0.1
+voice0_cutoff 900
+voice0_resonance 0.05
+voice0_lfo_hz 4.8
+voice0_vib_hz 0.15
+voice0_scale 0
+voice0_mel 60 60 67 67 69 69 67 0 65 65 64 64 62 62 60 0
+voice0_bts 4 4 4 4 4 4 2 2 4 4 4 4 4 4 2 2
+voice1_attack 0.04
+voice1_decay 0.05
+voice1_sustain 0.9
+voice1_release 0.1
+voice1_cutoff 900
+voice1_resonance 0.05
+voice1_lfo_hz 4.8
+voice1_vib_hz 0.15
+voice1_scale -24
+voice1_mel 60 60 67 67 69 69 67 0 65 65 64 64 62 62 60 0
+voice1_bts 4 4 4 4 4 4 2 2 4 4 4 4 4 4 2 2
+voice2_attack 0.04
+voice2_decay 0.05
+voice2_sustain 0.9
+voice2_release 0.1
+voice2_cutoff 900
+voice2_resonance 0.05
+voice2_lfo_hz 4.8
+voice2_vib_hz 0.15
+voice2_scale -16
+voice2_mel 60 60 67 67 69 69 67 0 65 65 64 64 62 62 60 0
+voice2_bts 4 4 4 4 4 4 2 2 4 4 4 4 4 4 2 2

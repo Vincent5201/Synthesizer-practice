@@ -7,5 +7,7 @@
 * Dual-voice architecture capable of rendering independent melodies.
 * Example configurations for Strings, Brass, and Flute-like timbres.
 * Upgraded 128-point Sine lookup table to 1024-point.
+* Add a simple UI.
 
 > The impact of some adjustments is not entirely certain and is still under investigation.
+
