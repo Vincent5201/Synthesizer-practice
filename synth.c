@@ -540,6 +540,8 @@ int main() {
 
 // for ui
 #define MAX_SEQ 1024
+typedef q31_t (*wave_fn_t)(q31_t input, q31_t dt);
+
 typedef struct {
     double a, d, s, r;
     int cutoff, scale;
@@ -548,13 +550,24 @@ typedef struct {
     uint8_t bts[MAX_SEQ];
     int len;
     uint32_t idx, dur;
+    char wave[16];
 } voice_cfg_t;
+
+static wave_fn_t wave_from_string(const char *s) {
+    if (!strcmp(s, "sine")) return sine_wave;
+    if (!strcmp(s, "square")) return square_wave;
+    if (!strcmp(s, "sawtooth")) return sawtooth_wave;
+    return sawtooth_wave;
+}
 
 int main(void) {
     voice_cfg_t cfg[SYNTH_VOICES];
     int voice_count = 0;
 
     memset(cfg, 0, sizeof(cfg));
+    for (int i = 0; i < SYNTH_VOICES; i++)
+        strcpy(cfg[i].wave, "sawtooth");
+
 
     // parse config.txt
     FILE *f = fopen("config.txt", "r");
@@ -573,7 +586,7 @@ int main(void) {
 
         if (v >= SYNTH_VOICES) continue;
         if (v + 1 > voice_count) voice_count = v + 1;
-
+        
         if (!strcmp(key, "attack"))   sscanf(line, "voice%d_attack %lf", &v, &cfg[v].a);
         else if (!strcmp(key, "decay"))    sscanf(line, "voice%d_decay %lf", &v, &cfg[v].d);
         else if (!strcmp(key, "sustain"))  sscanf(line, "voice%d_sustain %lf", &v, &cfg[v].s);
@@ -583,6 +596,7 @@ int main(void) {
         else if (!strcmp(key, "lfo_hz"))   sscanf(line, "voice%d_lfo_hz %lf", &v, &cfg[v].lfo);
         else if (!strcmp(key, "vib_hz"))   sscanf(line, "voice%d_vib_hz %lf", &v, &cfg[v].vib);
         else if (!strcmp(key, "scale"))   sscanf(line, "voice%d_scale %d", &v, &cfg[v].scale);
+        else if (!strcmp(key, "wave")) sscanf(line, "voice%d_wave %15s", &v, cfg[v].wave);
         else if (!strcmp(key, "mel")) {
             cfg[v].len = 0;
             char *p = strchr(line, ' ');
@@ -606,9 +620,10 @@ int main(void) {
         synth_init_envelope_node(&synth_voices[i].nodes[1], NULL, (q31_t)(cfg[i].a * Q31_MAX),
             (q31_t)(cfg[i].d * Q31_MAX), (q31_t)(cfg[i].s * Q31_MAX), (q31_t)(cfg[i].r * Q31_MAX));
         q31_t lfo_inc = SYNTH_HZ_TO_PHASE(cfg[i].lfo), vib_inc = SYNTH_HZ_TO_PHASE(cfg[i].vib);
+        wave_fn_t osc_wave = wave_from_string(cfg[i].wave);
         synth_init_osc_node(&synth_voices[i].nodes[2], &vib_inc, &lfo_inc, NULL, sine_wave);
         synth_init_osc_node(&synth_voices[i].nodes[3], &synth_voices[i].nodes[1].output,
-            &synth_voices[i].phase_incr, &synth_voices[i].nodes[2].output, sawtooth_wave);
+            &synth_voices[i].phase_incr, &synth_voices[i].nodes[2].output, osc_wave);
         synth_init_filter_lp_node(&synth_voices[i].nodes[0], &synth_voices[i].nodes[3].output,
             svf_cutoff(cfg[i].cutoff), (q31_t)(cfg[i].res * Q31_MAX));
     }

@@ -9,6 +9,7 @@ class VoiceFrame(ttk.LabelFrame):
         self.idx = idx
         self.on_delete = on_delete
 
+        self.wave = tk.StringVar(value="sawtooth")
         self.attack = tk.DoubleVar(value=0.04)
         self.decay = tk.DoubleVar(value=0.05)
         self.sustain = tk.DoubleVar(value=0.9)
@@ -28,26 +29,51 @@ class VoiceFrame(ttk.LabelFrame):
         # 2 2 2 2 2 2 2 2 2 2
         self._build()
 
-    def _slider(self, row, text, var, frm, to, res=0.01):
+    def _slider(self, row, text, var, frm, to, step):
         ttk.Label(self, text=text).grid(row=row, column=0, sticky="w")
-        ttk.Scale(
-            self, variable=var, from_=frm, to=to, orient="horizontal"
-        ).grid(row=row, column=1, sticky="ew", padx=5)
+
+        scale = tk.Scale(
+            self,
+            variable=var,
+            from_=frm,
+            to=to,
+            resolution=step,
+            orient="horizontal",
+            showvalue=False
+        )
+        scale.grid(row=row, column=1, sticky="ew", padx=5)
+
         ttk.Entry(self, textvariable=var, width=6).grid(row=row, column=2)
 
     def _build(self):
         self.columnconfigure(1, weight=1)
 
         row = 0
-        self._slider(row, "Attack", self.attack, 0, 1); row += 1
-        self._slider(row, "Decay", self.decay, 0, 1); row += 1
-        self._slider(row, "Sustain", self.sustain, 0, 1); row += 1
-        self._slider(row, "Release", self.release, 0, 1); row += 1
-        self._slider(row, "Cutoff", self.cutoff, 100, 5000); row += 1
-        self._slider(row, "Resonance", self.resonance, 0.01, 1); row += 1
-        self._slider(row, "LFO Hz", self.lfo, 0.1, 20); row += 1
-        self._slider(row, "Vib Hz", self.vib, 0.01, 10); row += 1
-        self._slider(row, "Scale", self.scale, -48, 48); row += 1
+        ttk.Label(self, text="Waveform").grid(row=row, column=0, sticky="w")
+        frame = ttk.Frame(self)
+        frame.grid(row=row, column=1, columnspan=2, sticky="w")
+
+        for w in ["sine", "square", "sawtooth"]:
+            ttk.Radiobutton(frame, text=w, value=w, variable=self.wave).pack(side="left")
+        row += 1
+        self._slider(row, "Attack", self.attack, 0, 1, 0.01)
+        row += 1
+        self._slider(row, "Decay", self.decay, 0, 1, 0.01)
+        row += 1
+        self._slider(row, "Sustain", self.sustain, 0, 1, 0.01)
+        row += 1
+        self._slider(row, "Release", self.release, 0, 1, 0.01)
+        row += 1
+        self._slider(row, "Cutoff", self.cutoff, 100, 5000, 10)
+        row += 1
+        self._slider(row, "Resonance", self.resonance, 0.01, 1, 0.01)
+        row += 1
+        self._slider(row, "LFO Hz", self.lfo, 0.1, 20, 0.1)
+        row += 1
+        self._slider(row, "Vib Hz", self.vib, 0.01, 10, 0.01)
+        row += 1
+        self._slider(row, "Scale", self.scale, -48, 48, 1)
+        row += 1
 
         ttk.Label(self, text="Melody").grid(row=row, column=0, sticky="w")
         ttk.Entry(self, textvariable=self.mel, width=45)\
@@ -66,6 +92,7 @@ class VoiceFrame(ttk.LabelFrame):
     def to_txt(self):
         i = self.idx
         return "\n".join([
+            f"voice{i}_wave {self.wave.get()}",
             f"voice{i}_attack {self.attack.get()}",
             f"voice{i}_decay {self.decay.get()}",
             f"voice{i}_sustain {self.sustain.get()}",
