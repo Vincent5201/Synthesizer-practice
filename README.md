@@ -8,6 +8,16 @@
 * Example configurations for Strings, Brass, and Flute-like timbres.
 * Upgraded 128-point Sine lookup table to 1024-point.
 * Add a simple UI.
+* Add a realtime version
 
 > The impact of some adjustments is not entirely certain and is still under investigation.
+
+## Running
+### Original Synthesizer
+* `synth.c` generate specific `.wav` files controled by `ui.py`.
+* Run `gcc synth.c -o synth` and then run `python3 ui.py`.
+
+### Realtime Synthesizer
+* `synth_rt.c` can detect keyboard and generate sounds in realtime.
+* Run `gcc synth_rt.c -lwinmm -o synth_rt` and then run `./synth_rt`
 

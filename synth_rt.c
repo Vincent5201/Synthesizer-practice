@@ -554,7 +554,7 @@ static int16_t audio_buf[NUM_BUFFERS][BUFFER_SAMPLES];
 static HWAVEOUT hWave;
 static WAVEHDR waveHdr[NUM_BUFFERS];
 
-static void note_on(int v, uint8_t note) {
+static void note_on(int v, int note) {
     synth_voices[v].note = note;
     synth_voices[v].phase_incr = note_to_phase(note);
     synth_voices[v].gate = 1;
