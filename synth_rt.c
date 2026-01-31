@@ -547,12 +547,12 @@ int main() {
 */
 
 // for realtime
+#define BUFFER_SAMPLES 1024
+#define NUM_BUFFERS 4
 
-#define BUFFER_SAMPLES 512
-
-static int16_t buffer[BUFFER_SAMPLES];
+static int16_t audio_buf[NUM_BUFFERS][BUFFER_SAMPLES];
 static HWAVEOUT hWave;
-static WAVEHDR waveHdr;
+static WAVEHDR waveHdr[NUM_BUFFERS];
 
 static void note_on(int v, uint8_t note) {
     synth_voices[v].note = note;
@@ -564,18 +564,22 @@ static void note_off(int v) {
     synth_voices[v].gate = 0;
 }
 
-void fill_buffer() {
+void fill_audio(int idx) {
     for (int i = 0; i < BUFFER_SAMPLES; i++)
-        buffer[i] = (int16_t)(synth_process() >> 16);
-    
+        audio_buf[idx][i] = (int16_t)(synth_process() >> 16);
+}
 
-    waveHdr.lpData = (LPSTR)buffer;
-    waveHdr.dwBufferLength = sizeof(buffer);
-    waveHdr.dwFlags = 0;
-    waveHdr.dwLoops = 0;
-
-    waveOutPrepareHeader(hWave, &waveHdr, sizeof(WAVEHDR));
-    waveOutWrite(hWave, &waveHdr, sizeof(WAVEHDR));
+void CALLBACK wave_callback(HWAVEOUT hwo, UINT uMsg,
+    DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2)
+{
+    if (uMsg == WOM_DONE) {
+        WAVEHDR *hdr = (WAVEHDR*)dwParam1;
+        int idx = (int)(hdr - waveHdr);
+        if (idx < 0 || idx >= NUM_BUFFERS)
+            return;
+        fill_audio(idx);
+        waveOutWrite(hWave, &waveHdr[idx], sizeof(WAVEHDR));
+    }
 }
 
 
@@ -608,91 +612,41 @@ int main(void) {
     wf.nBlockAlign = wf.nChannels * wf.wBitsPerSample / 8;
     wf.nAvgBytesPerSec = wf.nSamplesPerSec * wf.nBlockAlign;
 
-    if (waveOutOpen(&hWave, WAVE_MAPPER, &wf, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
-        printf("Cannot open audio device\n");
+    if (waveOutOpen(&hWave, WAVE_MAPPER, &wf,
+        (DWORD_PTR)wave_callback, 0, CALLBACK_FUNCTION) != MMSYSERR_NOERROR) {
+        printf("waveOutOpen failed\n");
         return -1;
     }
 
-    int hkey_down_flag = 0, jkey_down_flag = 0, kkey_down_flag = 0, lkey_down_flag = 0;
-    int ykey_down_flag = 0, ukey_down_flag = 0, ikey_down_flag = 0, okey_down_flag = 0;
-
-    while (1) {
-        SHORT hh = GetAsyncKeyState('H');
-        SHORT jj = GetAsyncKeyState('J');
-        SHORT kk = GetAsyncKeyState('K');
-        SHORT ll = GetAsyncKeyState('L');
-        SHORT yy = GetAsyncKeyState('Y');
-        SHORT uu = GetAsyncKeyState('U');
-        SHORT ii = GetAsyncKeyState('I');
-        SHORT oo = GetAsyncKeyState('O');
-
-        if ((hh & 0x8000) && !hkey_down_flag) {
-            hkey_down_flag = 1;
-            note_on(0, 60);   // C4
-        } else if (!(hh & 0x8000) && hkey_down_flag) {
-            hkey_down_flag = 0;
-            note_off(0);
-        }
-
-        if ((jj & 0x8000) && !jkey_down_flag) {
-            jkey_down_flag = 1;
-            note_on(0, 62);
-        } else if (!(jj & 0x8000) && jkey_down_flag) {
-            jkey_down_flag = 0;
-            note_off(0);
-        }
-
-        if ((kk & 0x8000) && !kkey_down_flag) {
-            kkey_down_flag = 1;
-            note_on(0, 64);
-        } else if (!(kk & 0x8000) && kkey_down_flag) {
-            kkey_down_flag = 0;
-            note_off(0);
-        }
-
-        if ((ll & 0x8000) && !lkey_down_flag) {
-            lkey_down_flag = 1;
-            note_on(0, 65);
-        } else if (!(ll & 0x8000) && lkey_down_flag) {
-            lkey_down_flag = 0;
-            note_off(0);
-        }
-
-        if ((yy & 0x8000) && !ykey_down_flag) {
-            ykey_down_flag = 1;
-            note_on(0, 67);
-        } else if (!(yy & 0x8000) && ykey_down_flag) {
-            ykey_down_flag = 0;
-            note_off(0);
-        }
-
-        if ((uu & 0x8000) && !ukey_down_flag) {
-            ukey_down_flag = 1;
-            note_on(0, 69);
-        } else if (!(uu & 0x8000) && ukey_down_flag) {
-            ukey_down_flag = 0;
-            note_off(0);
-        }
-
-        if ((ii & 0x8000) && !ikey_down_flag) {
-            ikey_down_flag = 1;
-            note_on(0, 71);
-        } else if (!(ii & 0x8000) && ikey_down_flag) {
-            ikey_down_flag = 0;
-            note_off(0);
-        }
-
-        if ((oo & 0x8000) && !okey_down_flag) {
-            okey_down_flag = 1;
-            note_on(0, 72);
-        } else if (!(oo & 0x8000) && okey_down_flag) {
-            okey_down_flag = 0;
-            note_off(0);
-        }
-
-        fill_buffer();
-        Sleep(2);
+    for (int i = 0; i < NUM_BUFFERS; i++) {
+        waveHdr[i].lpData = (LPSTR)audio_buf[i];
+        waveHdr[i].dwBufferLength = sizeof(audio_buf[i]);
+        waveHdr[i].dwFlags = 0;
+        waveHdr[i].dwLoops = 0;
+        fill_audio(i);
+        waveOutPrepareHeader(hWave, &waveHdr[i], sizeof(WAVEHDR));
+        waveOutWrite(hWave, &waveHdr[i], sizeof(WAVEHDR));
     }
+    
+    char keys[]  = {'H','J','K','L','Y','U','I','O'};
+    uint8_t notes[] = {60,62,64,65,67,69,71,72};
+    int key_flag[8] = {0};
+    
+    printf("start\n");
+    while (1) {
+        for (int i = 0; i < 8; i++) {
+            SHORT s = GetAsyncKeyState(keys[i]);
+            if ((s & 0x8000) && !key_flag[i]) {
+                key_flag[i] = 1;
+                note_on(0, notes[i]);
+            } else if (!(s & 0x8000) && key_flag[i]) {
+                key_flag[i] = 0;
+                note_off(0);
+            }
+        }
+        Sleep(0.1);
+    }
+
     waveOutClose(hWave);
     return 0;
 }
