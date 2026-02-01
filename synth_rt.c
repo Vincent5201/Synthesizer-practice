@@ -719,7 +719,7 @@ int main(void) {
                 note_off(notes[i]);
             }
         }
-        Sleep(0.1);
+        Sleep(1);
     }
 
     waveOutClose(hWave);

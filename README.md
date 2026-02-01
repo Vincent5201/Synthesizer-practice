@@ -21,5 +21,5 @@
 * `synth_rt.c` can detect keyboard and generate sounds in realtime.
 * Run `gcc synth_rt.c -lwinmm -o synth_rt` and then run `./synth_rt`
 
-## Problems
-In `synth_rt.c`, at the `printf("on %d ", note);` statement on line 616, I observed that when I hold down two keys and press a third one, the "on..." message is no longer output. Based on this, I suspect the issue lies within windows.h.
+## Issue
+In `synth_rt.c`, at the `printf("on %d ", note);` statement on line 616, I observed that when I hold down two keys and press a third one, the "on..." message is no longer output. Based on this, I suspect the issue lies within windows.h or hardware constraint.
