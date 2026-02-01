@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+
 #include <windows.h>
 #include <mmsystem.h>
 #include <stdint.h>
@@ -549,24 +550,97 @@ int main() {
 // for realtime
 #define BUFFER_SAMPLES 1024
 #define NUM_BUFFERS 4
+#define RING_SAMPLES (BUFFER_SAMPLES * NUM_BUFFERS * 2)
 
 static int16_t audio_buf[NUM_BUFFERS][BUFFER_SAMPLES];
 static HWAVEOUT hWave;
 static WAVEHDR waveHdr[NUM_BUFFERS];
 
-static void note_on(int v, int note) {
+typedef struct {
+    int8_t active;
+    uint32_t age;
+    uint32_t note;
+} voice_state_t;
+
+voice_state_t voice_state[SYNTH_VOICES];
+uint32_t voice_counter = 0;
+
+static int16_t audio_ring[RING_SAMPLES];
+static volatile uint32_t ring_write = 0;
+static volatile uint32_t ring_read  = 0;
+
+static inline uint32_t ring_available(void) {
+    return (ring_write - ring_read);
+}
+
+DWORD WINAPI audio_thread(LPVOID arg) {
+    while (1) {
+        while (ring_available() < BUFFER_SAMPLES * NUM_BUFFERS) {
+            audio_ring[ring_write % RING_SAMPLES] = (int16_t)(synth_process() >> 16);
+            ring_write++;
+        }
+        Sleep(1);
+    }
+    return 0;
+}
+
+int alloc_voice(uint8_t note) {
+    int free_voice = -1;
+    int oldest_voice = 0;
+    uint32_t oldest_age = UINT32_MAX;
+
+    for (int i = 0; i < SYNTH_VOICES; i++) {
+        if (!voice_state[i].active) {
+            free_voice = i;
+            break;
+        }
+        if (voice_state[i].age < oldest_age) {
+            oldest_age = voice_state[i].age;
+            oldest_voice = i;
+        }
+    }
+
+    int v = (free_voice >= 0) ? free_voice : oldest_voice;
+    if (voice_state[v].active)
+        synth_voices[v].gate = 0;
+    
+    voice_state[v].active = 1;
+    voice_state[v].note = note;
+    voice_state[v].age = ++voice_counter;
+
+    return v;
+}
+
+
+static void note_on(int note) {
+    printf("on %d ", note);
+    int v = alloc_voice(note);
+    if (v < 0)
+        return;
     synth_voices[v].note = note;
     synth_voices[v].phase_incr = note_to_phase(note);
     synth_voices[v].gate = 1;
 }
 
-static void note_off(int v) {
-    synth_voices[v].gate = 0;
+static void note_off(int note) {
+    for (int i = 0; i < SYNTH_VOICES; i++) {
+        if (voice_state[i].active && voice_state[i].note == note) {
+            synth_voices[i].gate = 0;
+            voice_state[i].active = 0;
+            return;
+        }
+    }
 }
 
 void fill_audio(int idx) {
-    for (int i = 0; i < BUFFER_SAMPLES; i++)
-        audio_buf[idx][i] = (int16_t)(synth_process() >> 16);
+    for (int i = 0; i < BUFFER_SAMPLES; i++) {
+        if (ring_available() > 0) {
+            audio_buf[idx][i] = audio_ring[ring_read % RING_SAMPLES];
+            ring_read++;
+        } else {
+            audio_buf[idx][i] = 0;
+        }
+    }
 }
 
 void CALLBACK wave_callback(HWAVEOUT hwo, UINT uMsg,
@@ -617,6 +691,7 @@ int main(void) {
         printf("waveOutOpen failed\n");
         return -1;
     }
+    CreateThread(NULL, 0, audio_thread, NULL, 0, NULL);
 
     for (int i = 0; i < NUM_BUFFERS; i++) {
         waveHdr[i].lpData = (LPSTR)audio_buf[i];
@@ -638,10 +713,10 @@ int main(void) {
             SHORT s = GetAsyncKeyState(keys[i]);
             if ((s & 0x8000) && !key_flag[i]) {
                 key_flag[i] = 1;
-                note_on(0, notes[i]);
+                note_on(notes[i]);
             } else if (!(s & 0x8000) && key_flag[i]) {
                 key_flag[i] = 0;
-                note_off(0);
+                note_off(notes[i]);
             }
         }
         Sleep(0.1);
