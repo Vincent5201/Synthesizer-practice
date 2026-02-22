@@ -1,5 +1,6 @@
-## A Practice of Fixed-Point Modular Synthesizer
-> based on [here](https://gist.github.com/jserv/061b2ac9be06b446f31087357b8e4054)
+# Fixed-Point Modular Synthesizer Practice
+> This is a learning  project for fixed-point math and synthesizers. Based on an [existing framework]((https://gist.github.com/jserv/061b2ac9be06b446f31087357b8e4054)), I modified and enhanced the system with the assistance of LLMs to deepen technical understanding.
+
 ## Enhancements
 * Upgraded q15_t to q31_t.
 * Implemented PolyBLEP for Sawtooth and Square waves.
@@ -8,9 +9,8 @@
 * Example configurations for Strings, Brass, and Flute-like timbres.
 * Upgraded 128-point Sine lookup table to 1024-point.
 * Add a simple UI.
-* Add a realtime version running on windows.
+* Add a realtime version (by key press) running on windows.
 
-> The impact of some adjustments is not entirely certain and is still under investigation.
 
 ## Running
 ### Original Synthesizer
