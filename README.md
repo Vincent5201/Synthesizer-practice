@@ -1,5 +1,5 @@
 # Fixed-Point Modular Synthesizer Practice
-> This is a learning  project for fixed-point math and synthesizers. Based on an [existing framework]((https://gist.github.com/jserv/061b2ac9be06b446f31087357b8e4054)), I modified and enhanced the system with the assistance of LLMs to deepen technical understanding.
+This is a learning  project for fixed-point math and synthesizers. Based on an [existing framework](https://gist.github.com/jserv/061b2ac9be06b446f31087357b8e4054), I modified and enhanced the system with the assistance of LLMs to deepen technical understanding.
 
 ## Enhancements
 * Upgraded q15_t to q31_t.
